@@ -1,0 +1,119 @@
+---
+title: "Practical Learning Machine Project"
+---
+# Project information and approaches
+## Project background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Data
+
+The training data for this project are available here: [https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv]
+
+The test data are available here: [https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv]
+
+The data for this project come from this source: [http://groupware.les.inf.puc-rio.br/har]. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+## Approach:
+Our outcome is a factor variable "classe". For this data set, “participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in 5 different fashions: - exactly according to the specification (Class A) - throwing the elbows to the front (Class B) - lifting the dumbbell only halfway (Class C) - lowering the dumbbell only halfway (Class D) - throwing the hips to the front (Class E)
+
+Two models will be used including decision tree and random forest to build prediction models. The model with the highest accuracy will be chosen as our final test.
+
+## Cross-validation data set
+
+To build our model with cross-validation, the original testing data set will be divided into 2 subgroups: training data (70% of the original training data set) and validation set (30%). Our models will be fitted on the training set, then tested on the validation set. Once the best model is choosen, it will be tested on the original testing set.
+## Expected out-of-sample error
+
+The expected out-of-sample error will correspond to the quantity: 1-accuracy in the cross-validation data. Accuracy is the proportion of correct classified observation over the total sample in the subTesting data set. Expected accuracy is the expected accuracy in the out-of-sample data set (i.e. original testing data set). Thus, the expected value of the out-of-sample error will correspond to the expected number of missclassified observations/total observations in the Test data set, which is the quantity: 1-accuracy found from the cross-validation data set.
+
+# Getting data + libraries and data exploration + clean-up
+
+```{r}
+# install.packages("caret"); install.packages("randomForest"); install.packages("rpart"); 
+library(lattice); 
+library(ggplot2); 
+library(caret); 
+library(randomForest); 
+library(rpart); 
+library(rpart.plot);
+training_raw <- read.csv("pml-training.csv", header = TRUE)
+testing_raw <- read.csv("pml-testing.csv", header = TRUE)
+```
+data exploration
+```{r}
+dim(training_raw)
+unique(colSums((is.na(training_raw))))
+dim(testing_raw)
+unique(colSums((is.na(testing_raw))))
+```
+We noticed that in the training data set, there variables are either without or with 98% missing data (19216/19622). So we have to delete columns with most obvervations = missing values.
+```{r}
+training_raw[training_raw==""] <- NA
+training_raw1<-training_raw[,colSums(is.na(training_raw)) == 0]
+testing_raw1 <-testing_raw[,colSums(is.na(testing_raw)) == 0]
+dim(training_raw1)
+dim(testing_raw1)
+
+```
+
+We also need to exclude identifier, timestamp, and window data as they are not relevant for prediction.
+
+```{r}
+toremove <- grep("name|timestamp|window|X", colnames(training_raw), value=F) 
+training_raw2 <- training_raw1[,-toremove]
+testing_raw2 <- testing_raw1[,-toremove]
+dim(training_raw2)
+dim(testing_raw2)
+# we also check if there is any uninformative variables left in the data set
+NZV_cols <- nearZeroVar(training_raw2)
+names(NZV_cols)
+```
+
+We now partition the original training data set so that 70% of the training dataset into training and the remaining 30% for validation.
+
+```{r}
+set.seed(123)
+intrain <- createDataPartition(y=training_raw2$classe,p=.70,list=F)
+training <- training_raw2[intrain,]
+validation <- training_raw2[-intrain,]
+# The variable "classe" contains 5 levels: A, B, C, D and E. A plot of the outcome variable will allow us to see the frequency of each levels in the TrainTrainingSet data set and # compare one another.
+
+plot(training$classe, col="blue", main="Frequencies of variable classe in training data set", xlab="Classe", ylab="Frequency")
+
+```
+
+# Building prediction model 1 with Dicision Tree
+
+```{r}
+# Prediction model 1: Decision tree
+model1 <- rpart(classe ~ ., data=training, method="class")
+# view the decision tree with rpart.plot()
+rpart.plot(model1, type = 4, main="Classification Tree", extra = 102)
+# Predicting:
+prediction1 <- predict(model1, newdata=validation, type = "class")
+# Test the prediction power of this model
+confusionMatrix(prediction1, validation$classe)
+```
+
+# Building prediction model 2 with Random Forests
+```{r}
+# Using ML algorithms for prediction: Random Forests
+model2 <- randomForest(classe ~. , data=training)
+prediction2 <- predict(model2, newdata=validation, type = "class")
+
+# Testing prediction power of model 2
+confusionMatrix(prediction2, validation$classe)
+
+```
+
+# Decision on which Prediction Model to Use:
+The prediction accuracy of Random Forest algorithm (model2) was much higher than Decision Trees (model 1). Accuracy for Random Forest model was 0.9942 (95% CI: (0.992, 0.996)) compared to Decision Tree model with 0.7315 (95% CI: (0.72, 0.743)). Therefore the Random Forests model is choosen. The expected out-of-sample error is estimated at 0.005, or 0.5%.
+
+# Submission
+We used the prediction Model 2 (Random Forest) applied against the original testing dataset
+```{r}
+prediction3 <- predict(model2, newdata=testing_raw2, type = "class")
+prediction3
+```
+
+```
+
